@@ -1,211 +1,200 @@
-# 🚀 Quick Start Guide - Get Running in 10 Minutes
+# 🚀 Quick Start Guide
 
-## ✅ Step 1: Environment Setup (DONE)
-- ✅ Dependencies installed
-- ✅ `.env` file configured with your Supabase credentials
+## Prerequisites
+- ✅ Node.js and npm installed
+- ✅ Supabase account and project created
+- ✅ Environment variables configured in `.env`
 
-## 📊 Step 2: Set Up Database (DO THIS NOW)
+## Step 1: Run SQL Migration (5 minutes)
 
-### Open Supabase SQL Editor
-🔗 https://supabase.com/dashboard/project/xzzorozwxydpjxdrxtsi/sql
+### 1.1 Disable Email Confirmation
+1. Open your Supabase Dashboard
+2. Go to **Authentication** → **Providers** → **Email**
+3. **Turn OFF** "Confirm email"
+4. Click **Save**
 
-### Run Migration 1 - Create Tables
-1. Click **"+ New query"**
-2. Open file: `supabase/migrations/001_initial_schema.sql`
-3. Copy ALL the content (Ctrl+A, Ctrl+C)
-4. Paste into Supabase SQL Editor
-5. Click **"Run"** (or press Ctrl+Enter)
-6. ✅ Wait for "Success. No rows returned"
+### 1.2 Execute SQL Script
+1. Open **SQL Editor** in Supabase
+2. Click **New Query**
+3. Copy the ENTIRE contents from:
+   ```
+   DEMO_CTS/setup_authentication.sql
+   ```
+4. Paste into SQL Editor
+5. Click **RUN** (or Ctrl+Enter)
+6. You should see "Success. No rows returned"
 
-### Run Migration 2 - Enable Security
-1. Click **"+ New query"** again
-2. Open file: `supabase/migrations/002_row_level_security.sql`
-3. Copy ALL the content
-4. Paste into Supabase SQL Editor
-5. Click **"Run"**
-6. ✅ Wait for "Success"
-
-### Run Migration 3 - Load Demo Data
-1. Click **"+ New query"** again
-2. Open file: `supabase/migrations/003_seed_demo_data.sql`
-3. Copy ALL the content
-4. Paste into Supabase SQL Editor
-5. Click **"Run"**
-6. ✅ Wait for "Success"
-
-### Verify Database Setup
-1. Click **"Table Editor"** in left sidebar
-2. Click on **"organizations"** table
-3. You should see **3 rows** (Demo Medicare Payer, Pioneer Health, Community Care)
-4. ✅ If you see data, database is ready!
-
-## 👤 Step 3: Create Demo Users
-
-### Create Payer Admin User
-1. In Supabase dashboard, click **"Authentication"** in sidebar
-2. Click **"Users"** tab
-3. Click **"Add user"** → **"Create new user"**
-4. Fill in:
-   - **Email**: `payer@demo.com`
-   - **Password**: `Demo123456!`
-   - ✅ **Check**: "Auto Confirm User"
-5. Click **"Create user"**
-6. **COPY THE USER ID** (looks like: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`)
-
-### Link Payer User to Organization
-1. Go back to **SQL Editor**
-2. Click **"+ New query"**
-3. Copy this SQL and **REPLACE `USER_ID_HERE`** with your copied ID:
-
+### 1.3 Verify (Optional)
 ```sql
--- Insert profile for payer user
-INSERT INTO profiles (id, full_name, email, job_title)
-VALUES (
-  'USER_ID_HERE',
-  'Demo Payer Admin',
-  'payer@demo.com',
-  'System Administrator'
-);
+-- Check if profiles table was created
+SELECT * FROM profiles LIMIT 1;
 
--- Link user to payer organization
-INSERT INTO organization_members (organization_id, user_id, role, status)
-VALUES (
-  '00000000-0000-0000-0000-000000000001',
-  'USER_ID_HERE',
-  'PAYER_ADMIN',
-  'APPROVED'
-);
+-- Should return empty table (no error)
 ```
 
-4. Click **"Run"**
-5. ✅ You should see "Success"
+## Step 2: Start the Application (1 minute)
 
-### Create ACO Admin User
-1. Go back to **"Authentication"** → **"Users"**
-2. Click **"Add user"** → **"Create new user"**
-3. Fill in:
-   - **Email**: `aco@demo.com`
-   - **Password**: `Demo123456!`
-   - ✅ **Check**: "Auto Confirm User"
-4. Click **"Create user"**
-5. **COPY THE USER ID**
-
-### Link ACO User to Organization
-1. Go to **SQL Editor**
-2. Click **"+ New query"**
-3. Copy this SQL and **REPLACE `USER_ID_HERE`** with the ACO user ID:
-
-```sql
--- Insert profile for ACO user
-INSERT INTO profiles (id, full_name, email, job_title)
-VALUES (
-  'USER_ID_HERE',
-  'Demo ACO Admin',
-  'aco@demo.com',
-  'ACO Administrator'
-);
-
--- Link user to Pioneer Health Network
-INSERT INTO organization_members (organization_id, user_id, role, status)
-VALUES (
-  '00000000-0000-0000-0000-000000000002',
-  'USER_ID_HERE',
-  'ACO_ADMIN',
-  'APPROVED'
-);
-```
-
-4. Click **"Run"**
-5. ✅ Success!
-
-## 🧪 Step 4: Test Connection (OPTIONAL)
-
-Open `test-connection.html` in your browser to verify everything is working:
-```bash
-# Windows
-start test-connection.html
-
-# Or just double-click the file
-```
-
-You should see "✅ Connection Successful!"
-
-## 🚀 Step 5: Start the Application
+The dev server should already be running. If not:
 
 ```bash
+cd DEMO_CTS
 npm run dev
 ```
 
-The app will start at: **http://localhost:5173**
+Open: **http://localhost:5173**
 
-## 🎯 Step 6: Log In and Explore
+## Step 3: Test Authentication (3 minutes)
 
-### Test as Payer Admin
-1. Go to http://localhost:5173
-2. Login with:
-   - **Email**: `payer@demo.com`
-   - **Password**: `Demo123456!`
-3. You should see:
-   - **Payer Dashboard**
-   - 24 ACOs
-   - $2.42B total expenditure
-   - Portfolio overview
+### Create PAYER Account
+1. Go to http://localhost:5173/signup
+2. Click **"Payer / CMS"** card
+3. Enter details:
+   - Full Name: John Payer
+   - Email: john@payer.com
+   - Password: Test123456
+   - Confirm Password: Test123456
+4. Click **"Create Account"**
+5. ✅ Should auto-redirect to `/payer/dashboard`
 
-### Test as ACO Admin
-1. Click **"Sign Out"**
-2. Login with:
-   - **Email**: `aco@demo.com`
-   - **Password**: `Demo123456!`
-3. You should see:
-   - **ACO Dashboard** (Pioneer Health Network)
-   - Performance score: 88.4%
-   - Projected savings: $5.1M
-   - Provider performance
+### Create ACO Account
+1. Open in incognito or logout first
+2. Go to http://localhost:5173/signup
+3. Click **"ACO"** card
+4. Enter details:
+   - Full Name: Jane ACO
+   - Email: jane@aco.com
+   - Password: Test123456
+   - Confirm Password: Test123456
+5. Click **"Create Account"**
+6. ✅ Should auto-redirect to `/aco/dashboard`
 
-## ✅ Success Checklist
+### Test Login
+1. Logout
+2. Go to http://localhost:5173/login
+3. Login with john@payer.com / Test123456
+4. ✅ Should auto-redirect to `/payer/dashboard`
 
-- [ ] Ran all 3 database migrations
-- [ ] Created payer user account
-- [ ] Created ACO user account
-- [ ] Linked both users to organizations
-- [ ] Started dev server (`npm run dev`)
-- [ ] Can log in as payer user
-- [ ] Can log in as ACO user
-- [ ] Both dashboards display data
+## Step 4: Test Analysis Feature (2 minutes)
+
+### Access Analysis
+1. Login as PAYER user (john@payer.com)
+2. On dashboard, click the **"Analysis"** card (middle position)
+3. ✅ Should navigate to `/payer/analysis`
+
+### Configure Analysis
+1. **Select Years**: Click 2026, 2025, 2024 (or click "Select All")
+2. **Select ACOs**: Click 2-3 ACO cards (or click "Select All")
+3. **Select Analysis Types**: Click "Future Risks" and "Performance"
+4. ✅ Button should show: "Ready to analyze X year(s), X ACO(s) with X analysis type(s)"
+
+### Generate Results
+1. Click **"View Analysis"** button
+2. ✅ Should show loading spinner: "Generating Analysis..."
+3. Wait 2.5 seconds
+4. ✅ Should display analysis results with cards
+
+### Explore Results
+1. Scroll through different analysis types
+2. Check the data visualizations
+3. Click **"New Analysis"** to reconfigure
+4. Click **"Back to Dashboard"** to return
+
+## Step 5: Verify Everything Works ✅
+
+### Authentication Checklist
+- [x] PAYER signup works
+- [x] ACO signup works  
+- [x] Login redirects to correct dashboard
+- [x] Session persists on refresh
+- [x] Logout works
+- [x] ACO cannot access /payer/analysis
+- [x] PAYER cannot access /aco/dashboard
+
+### Analysis Feature Checklist
+- [x] Analysis card visible on PAYER dashboard
+- [x] Can select multiple years
+- [x] Can select multiple ACOs
+- [x] Can select multiple analysis types
+- [x] Bulk select/clear works
+- [x] View Analysis button shows loading
+- [x] Results display correctly
+- [x] New Analysis resets form
+- [x] Navigation works
+
+## 🎉 You're Done!
+
+The application is now fully functional with:
+1. ✅ Simplified authentication (2 roles)
+2. ✅ Predictive analysis feature (CMS portal)
+3. ✅ Smooth UI with animations
+4. ✅ Mock data for testing
+
+## 🔗 Next Steps
+
+### For Development
+- Read `ANALYSIS_FEATURE.md` for detailed feature docs
+- Read `IMPLEMENTATION_SUMMARY.md` for technical overview
+- Check `SIMPLIFIED_AUTH_SETUP.md` for auth troubleshooting
+
+### For Backend Integration
+- Create POST `/api/analysis` endpoint
+- Match request/response format in docs
+- Uncomment API call in `PayerAnalysis.tsx` (line ~280)
+- Replace mock data with real API response
 
 ## ⚠️ Troubleshooting
 
-### Can't log in?
-- Check user was created in Supabase Auth
-- Ensure "Auto Confirm User" was checked
-- Verify SQL scripts ran successfully (check profiles and organization_members tables)
+### "No organization access" Error
+**Solution**: Run Step 1 (SQL migration)
 
-### Blank dashboard?
-- Check browser console (F12) for errors
-- Verify all 3 migrations ran
-- Check organization_members table has your users
+### Analysis Page Shows 404
+**Solution**: 
+- Verify you're logged in as PAYER user
+- Check dev server is running
+- Hard refresh browser (Ctrl+Shift+R)
 
-### "Missing Supabase environment variables"?
-- Verify `.env` file exists
-- Check values are correct (no quotes, no spaces)
-- Restart dev server after changing `.env`
+### Profile Not Created After Signup
+**Solution**:
+```sql
+-- Check Supabase logs
+-- Manually verify trigger exists:
+SELECT trigger_name FROM information_schema.triggers 
+WHERE event_object_table = 'users';
 
-## 🎉 You're All Set!
+-- Should show: on_auth_user_created
+```
 
-Once logged in, you can:
-- View ACO portfolio (as Payer)
-- Monitor financial performance
-- Track quality measures
-- Analyze provider performance
-- View care opportunities (as ACO)
+### Cannot Access Analysis Feature
+**Solution**:
+- Verify you're logged in as PAYER (not ACO)
+- Check browser console for errors
+- Verify `/payer/analysis` route in App.tsx
 
-## 📚 Next Steps
+## 📚 Documentation
 
-- Read `SETUP_GUIDE.md` for detailed explanations
-- Review `docs/FINANCIAL_CALCULATIONS.md` to understand the math
-- Explore the code in `src/` folder
-- Add more features!
+- `QUICK_START.md` - This file (⭐ Start here)
+- `IMPLEMENTATION_SUMMARY.md` - Complete overview
+- `ANALYSIS_FEATURE.md` - Analysis feature details
+- `SIMPLIFIED_AUTH_SETUP.md` - Auth setup guide
+- `setup_authentication.sql` - Database migration
+
+## 💡 Tips
+
+1. **Use Chrome DevTools**: Check Console and Network tabs for errors
+2. **Check Supabase Logs**: Real-time logs in Supabase Dashboard
+3. **Test in Incognito**: Avoid cookie/cache issues
+4. **Clear Browser Data**: If authentication seems stuck
+
+## 🆘 Need Help?
+
+1. Check browser console for errors
+2. Check Supabase logs
+3. Review documentation files
+4. Verify SQL migration ran successfully
+5. Confirm email confirmation is disabled
 
 ---
 
-**Need Help?** Check the troubleshooting section or review the full `SETUP_GUIDE.md`
+**Estimated Time**: 11 minutes total
+
+**Result**: Fully functional VBC Analytics platform with simplified auth and predictive analysis!

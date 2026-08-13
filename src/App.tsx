@@ -12,6 +12,7 @@ import SignUpPage from './pages/auth/SignUpPage';
 // Payer pages
 import PayerDashboard from './pages/payer/PayerDashboard';
 import PayerACOList from './pages/payer/PayerACOList';
+import PayerAnalysis from './pages/payer/PayerAnalysis';
 
 // ACO pages
 import ACODashboard from './pages/aco/ACODashboard';
@@ -95,6 +96,7 @@ function App() {
                 <Routes>
                   <Route path="dashboard" element={<PayerDashboard />} />
                   <Route path="acos" element={<PayerACOList />} />
+                  <Route path="analysis" element={<PayerAnalysis />} />
                   <Route path="*" element={<Navigate to="/payer/dashboard" />} />
                 </Routes>
               </ProtectedRoute>

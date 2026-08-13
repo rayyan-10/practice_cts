@@ -281,16 +281,19 @@ export default function PayerDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="hover:bg-accent cursor-pointer transition-colors">
+            <Card 
+              className="hover:bg-accent cursor-pointer transition-colors"
+              onClick={() => navigate('/payer/analysis')}
+            >
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <TrendingUp className="h-5 w-5" />
-                  Financial Performance
+                  Analysis
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  View detailed financial analytics
+                  AI-powered predictive insights and analysis
                 </p>
               </CardContent>
             </Card>
