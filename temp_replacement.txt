@@ -1,0 +1,6 @@
+﻿            onClick={() => navigate('/aco/predictions')}
+          >
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Brain className="h-5 w-5 text-blue-600" />
+                AI Predictions

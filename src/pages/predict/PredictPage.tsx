@@ -324,7 +324,7 @@ export default function PredictPage() {
   return (
     <AppShell
       userContext={userContext}
-      pageTitle="VBC Contract Performance Analytics"
+      pageTitle="Performance Analytics"
       performanceYear={form.performanceYear}
     >
       {/* Page background */}

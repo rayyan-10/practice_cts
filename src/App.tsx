@@ -13,9 +13,13 @@ import SignUpPage from './pages/auth/SignUpPage';
 import PayerDashboard from './pages/payer/PayerDashboard';
 import PayerACOList from './pages/payer/PayerACOList';
 import PayerAnalysis from './pages/payer/PayerAnalysis';
+import PayerPrediction from './pages/payer/PayerPrediction';
+import PayerReports from './pages/payer/PayerReports';
+import PayerSettings from './pages/payer/PayerSettings';
 
 // ACO pages
 import ACODashboard from './pages/aco/ACODashboard';
+import ACOPrediction from './pages/aco/ACOPrediction';
 
 // Prediction page (both roles)
 import PredictPage from './pages/predict/PredictPage';
@@ -90,6 +94,9 @@ function App() {
                   <Route path="dashboard" element={<PayerDashboard />} />
                   <Route path="acos"      element={<PayerACOList />} />
                   <Route path="analysis"  element={<PayerAnalysis />} />
+                  <Route path="predictions" element={<PayerPrediction />} />
+                  <Route path="reports"   element={<PayerReports />} />
+                  <Route path="settings"  element={<PayerSettings />} />
                   <Route path="*"         element={<Navigate to="/payer/dashboard" />} />
                 </Routes>
               </ProtectedRoute>
@@ -103,6 +110,8 @@ function App() {
               <ProtectedRoute requireRole="aco">
                 <Routes>
                   <Route path="dashboard" element={<ACODashboard />} />
+                  <Route path="predictions" element={<ACOPrediction />} />
+                  <Route path="settings"  element={<PayerSettings />} />
                   <Route path="*"         element={<Navigate to="/aco/dashboard" />} />
                 </Routes>
               </ProtectedRoute>

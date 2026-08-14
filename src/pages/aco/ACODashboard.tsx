@@ -3,7 +3,7 @@
  * - Uses AppShell (sidebar highlights Dashboard)
  * - Fetches only this user's assigned ACO data via Supabase RLS
  * - Falls back to demo values when DB has no data yet
- * - Provides Predict Performance button pre-scoped to this ACO
+ * - Provides AI Predictions button pre-scoped to this ACO
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -85,7 +85,6 @@ export default function ACODashboard() {
   const [stats, setStats]             = useState<ACOStats | null>(null);
   const [providers, setProviders]     = useState<ProviderRow[]>([]);
   const [recommendations, setRecs]    = useState<RecommendationRow[]>([]);
-  const [loading, setLoading]         = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -98,7 +97,6 @@ export default function ACODashboard() {
       if (!acoId) {
         // No assignment yet — show demo data
         setStats(DEMO_STATS);
-        setLoading(false);
         return;
       }
 
@@ -111,7 +109,6 @@ export default function ACODashboard() {
 
       if (acoErr || !aco) {
         setStats(DEMO_STATS);
-        setLoading(false);
         return;
       }
 
@@ -248,31 +245,16 @@ export default function ACODashboard() {
           }))
         );
       }
-
-      setLoading(false);
     }
 
     load();
   }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading dashboard…</p>
-        </div>
-      </div>
-    );
-  }
 
   const s = stats ?? DEMO_STATS;
   const variance    = s.benchmark - s.actualExpenditure;
   const variancePct = s.benchmark > 0 ? (variance / s.benchmark) * 100 : 0;
   const cpb         = s.beneficiaryCount > 0 ? s.actualExpenditure / s.beneficiaryCount : 0;
   const benchCpb    = s.beneficiaryCount > 0 ? s.benchmark / s.beneficiaryCount : 0;
-
-  const isDemo = !userContext?.acoId;
 
   return (
     <AppShell
@@ -282,26 +264,13 @@ export default function ACODashboard() {
     >
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
-        {/* Demo banner */}
-        {isDemo && (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-            <div>
-              <p className="font-medium text-yellow-900 dark:text-yellow-100 text-sm">Demo Environment</p>
-              <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                Your account is not yet linked to an ACO. Contact your administrator to assign your ACO.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* ── Performance Overview Card ─────────────────────────────────── */}
         <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900">
           <CardHeader className="flex flex-row items-start justify-between pb-2">
             <div>
               <CardTitle className="text-xl">{s.acoName}</CardTitle>
               <CardDescription>
-                {s.acoIdentifier} • {s.programType || 'VBC Contract'} • Performance Year {new Date().getFullYear()}
+                {s.acoIdentifier} • {s.programType || 'Value-Based Care'} • Performance Year {new Date().getFullYear()}
               </CardDescription>
             </div>
             {/* Predict button scoped to this ACO */}
@@ -315,7 +284,7 @@ export default function ACODashboard() {
               size="sm"
             >
               <Brain className="h-4 w-4" />
-              Predict Performance
+              AI Predictions
             </Button>
           </CardHeader>
           <CardContent>
@@ -403,9 +372,7 @@ export default function ACODashboard() {
           <CardHeader>
             <CardTitle>Provider Performance</CardTitle>
             <CardDescription>
-              {providers.length > 0
-                ? 'Live provider performance from your ACO network'
-                : 'Top and underperforming providers in your network (demo data)'}
+              Top and underperforming providers in your network
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -456,9 +423,7 @@ export default function ACODashboard() {
           <CardHeader>
             <CardTitle>Care Opportunities</CardTitle>
             <CardDescription>
-              {recommendations.length > 0
-                ? 'Active recommendations for your ACO'
-                : 'Recommended interventions to improve outcomes (demo data)'}
+              Recommended interventions to improve outcomes and quality scores
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -498,18 +463,18 @@ export default function ACODashboard() {
           <Card
             className="hover:bg-accent cursor-pointer transition-colors"
             onClick={() =>
-              navigate('/predict', { state: { acoId: s.acoId, acoName: s.acoName } })
+              navigate('/aco/predictions')
             }
           >
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Brain className="h-5 w-5 text-blue-600" />
-                Predict Performance
+                AI Predictions
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Run future performance prediction for your ACO
+                Run ML-powered risk and performance predictions
               </p>
             </CardContent>
           </Card>

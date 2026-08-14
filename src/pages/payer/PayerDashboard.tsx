@@ -238,23 +238,10 @@ export default function PayerDashboard() {
   return (
     <AppShell
       userContext={userContext}
-      pageTitle="VBC Contract Performance Analytics"
+      pageTitle="Portfolio Performance Dashboard"
       performanceYear={new Date().getFullYear()}
     >
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
-
-        {/* Demo banner (shown when no live data) */}
-        {portfolio.length === 0 && (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-            <div>
-              <p className="font-medium text-yellow-900 dark:text-yellow-100 text-sm">Demo Environment</p>
-              <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                Showing synthetic data. Apply migration 005 and assign ACO users to see live data.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* ── KPI Row 1 ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -329,11 +316,11 @@ export default function PayerDashboard() {
             </div>
             <Button
               size="sm"
-              onClick={() => navigate('/predict')}
+              onClick={() => navigate('/payer/predictions')}
               className="gap-1.5 bg-blue-700 hover:bg-blue-800 text-white"
             >
               <Brain className="h-4 w-4" />
-              Predict Performance
+              AI Predictions
             </Button>
           </CardHeader>
           <CardContent>
@@ -423,17 +410,17 @@ export default function PayerDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card
             className="hover:bg-accent cursor-pointer transition-colors"
-            onClick={() => navigate('/predict')}
+            onClick={() => navigate('/payer/predictions')}
           >
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Brain className="h-5 w-5 text-blue-600" />
-                Predict Performance
+                AI Predictions
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Run ACO performance prediction and risk assessment
+                ML-powered ACO & provider risk predictions
               </p>
             </CardContent>
           </Card>
@@ -467,7 +454,7 @@ export default function PayerDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                AI-powered predictive insights and reports
+                Historical trends and insights dashboard
               </p>
             </CardContent>
           </Card>

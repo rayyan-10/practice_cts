@@ -18,7 +18,6 @@ import {
   FileText,
   Settings,
   LogOut,
-  Activity,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -34,7 +33,7 @@ interface NavItem {
 interface AppShellProps {
   children: ReactNode;
   userContext: UserContext | null;
-  /** Title shown in the top header (defaults to "VBC Contract Performance Analytics") */
+  /** Title shown in the top header */
   pageTitle?: string;
   /** Year badge shown in header */
   performanceYear?: number;
@@ -43,13 +42,22 @@ interface AppShellProps {
 // ─── Navigation items ────────────────────────────────────────────────────────
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard',  icon: LayoutDashboard, to: '/payer/dashboard', role: 'PAYER' },
-  { label: 'Dashboard',  icon: LayoutDashboard, to: '/aco/dashboard',   role: 'ACO'  },
-  { label: 'Predict',    icon: Brain,           to: '/predict'                        },
-  { label: 'ACO List',   icon: Building2,       to: '/payer/acos',      role: 'PAYER' },
-  { label: 'Analytics',  icon: BarChart3,       to: '/payer/analysis',  role: 'PAYER' },
-  { label: 'Reports',    icon: FileText,        to: '/reports'                        },
-  { label: 'Settings',   icon: Settings,        to: '/settings'                       },
+  // Dashboard
+  { label: 'Dashboard',      icon: LayoutDashboard, to: '/payer/dashboard',    role: 'PAYER' },
+  { label: 'Dashboard',      icon: LayoutDashboard, to: '/aco/dashboard',      role: 'ACO'   },
+  
+  // Payer-specific
+  { label: 'ACO List',       icon: Building2,       to: '/payer/acos',         role: 'PAYER' },
+  { label: 'Analysis',       icon: BarChart3,       to: '/payer/analysis',     role: 'PAYER' },
+  { label: 'AI Predictions', icon: Brain,           to: '/payer/predictions',  role: 'PAYER' },
+  { label: 'Reports',        icon: FileText,        to: '/payer/reports',      role: 'PAYER' },
+  
+  // ACO-specific
+  { label: 'AI Predictions', icon: Brain,           to: '/aco/predictions',    role: 'ACO'   },
+  
+  // Both roles
+  { label: 'Settings',       icon: Settings,        to: '/payer/settings',     role: 'PAYER' },
+  { label: 'Settings',       icon: Settings,        to: '/aco/settings',       role: 'ACO'   },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -57,7 +65,7 @@ const NAV_ITEMS: NavItem[] = [
 export default function AppShell({
   children,
   userContext,
-  pageTitle = 'VBC Contract Performance Analytics',
+  pageTitle = 'ContractIQ',
   performanceYear,
 }: AppShellProps) {
   const navigate = useNavigate();
@@ -79,48 +87,64 @@ export default function AppShell({
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-950">
 
       {/* ── Dark sidebar (desktop) ──────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col w-56 flex-shrink-0 bg-[#0f1729] text-white">
+      <aside className="hidden md:flex flex-col w-64 flex-shrink-0 bg-gradient-to-b from-[#0f1729] to-[#1a2642] text-white shadow-2xl">
         {/* Logo / brand */}
-        <div className="flex items-center gap-2 px-5 py-5 border-b border-white/10">
-          <div className="h-8 w-8 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
-            <Activity className="h-5 w-5 text-white" />
+        <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+            <Brain className="h-6 w-6 text-white" />
           </div>
-          <span className="text-sm font-bold leading-tight tracking-wide">
-            VBC Analytics
-          </span>
+          <div>
+            <span className="text-lg font-bold leading-tight tracking-wide block">
+              ContractIQ
+            </span>
+            <span className="text-xs text-blue-200/60">
+              Healthcare Analytics
+            </span>
+          </div>
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
           {visibleItems.map(item => {
             const Icon = item.icon;
-            const isActive = location.pathname.startsWith(item.to);
+            const isActive = location.pathname === item.to || 
+                           (item.to !== '/' && location.pathname.startsWith(item.to));
             return (
               <NavLink
                 key={item.label + item.to}
                 to={item.to}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30'
                     : 'text-blue-100/70 hover:bg-white/10 hover:text-white'
                 )}
               >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                {item.label}
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                <span>{item.label}</span>
               </NavLink>
             );
           })}
         </nav>
 
-        {/* Logout at bottom */}
-        <div className="px-3 py-4 border-t border-white/10">
+        {/* User info + Logout at bottom */}
+        <div className="px-4 py-4 border-t border-white/10 space-y-2">
+          {userContext && (
+            <div className="px-4 py-3 bg-white/5 rounded-lg">
+              <p className="text-sm font-medium text-white truncate">
+                {userContext.fullName}
+              </p>
+              <p className="text-xs text-blue-200/60 truncate">
+                {userContext.role === 'PAYER' ? 'CMS / Payer' : 'ACO User'}
+              </p>
+            </div>
+          )}
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-blue-100/70 hover:bg-white/10 hover:text-white transition-colors"
+            className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-blue-100/70 hover:bg-white/10 hover:text-white transition-all duration-200"
           >
-            <LogOut className="h-4 w-4 flex-shrink-0" />
-            Logout
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            <span>Logout</span>
           </button>
         </div>
       </aside>
@@ -129,58 +153,56 @@ export default function AppShell({
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
         {/* White top header */}
-        <header className="flex-shrink-0 h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 z-10">
+        <header className="flex-shrink-0 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 shadow-sm z-10">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Mobile hamburger placeholder — sidebar replaced by bottom nav on mobile */}
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+            <span className="text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
               {pageTitle}
             </span>
             {performanceYear && (
-              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              <span className="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                 PY {performanceYear}
               </span>
             )}
           </div>
 
-          {/* Right: user info */}
+          {/* Right: user avatar */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            {userContext && (
-              <div className="text-right leading-tight">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {userContext.fullName}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {userContext.email}
-                </p>
-              </div>
-            )}
-            <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            <div className="hidden sm:block text-right leading-tight">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {userContext?.fullName}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {userContext?.role === 'PAYER' ? 'CMS / Payer' : 'ACO User'}
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-md">
               {userContext?.fullName?.[0]?.toUpperCase() ?? '?'}
             </div>
           </div>
         </header>
 
         {/* Page content — scrollable */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           {children}
         </main>
 
         {/* ── Bottom nav (mobile only) ─────────────────────────────────── */}
-        <nav className="md:hidden flex-shrink-0 bg-[#0f1729] border-t border-white/10 flex items-center justify-around px-2 py-1.5">
+        <nav className="md:hidden flex-shrink-0 bg-gradient-to-r from-[#0f1729] to-[#1a2642] border-t border-white/10 flex items-center justify-around px-2 py-2 shadow-lg">
           {visibleItems.slice(0, 5).map(item => {
             const Icon = item.icon;
-            const isActive = location.pathname.startsWith(item.to);
+            const isActive = location.pathname === item.to ||
+                           (item.to !== '/' && location.pathname.startsWith(item.to));
             return (
               <NavLink
                 key={item.label + item.to}
                 to={item.to}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 px-2 py-1 rounded text-xs transition-colors',
-                  isActive ? 'text-white' : 'text-blue-100/60'
+                  'flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs transition-colors',
+                  isActive ? 'text-white bg-white/10' : 'text-blue-100/60'
                 )}
               >
                 <Icon className="h-5 w-5" />
-                {item.label}
+                <span className="text-[10px]">{item.label}</span>
               </NavLink>
             );
           })}
