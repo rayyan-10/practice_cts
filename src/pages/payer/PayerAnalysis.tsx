@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
 import { getUserContext } from '@/lib/auth';
+import type { UserContext } from '@/lib/auth';
+import AppShell from '@/components/layout/AppShell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Building2,
-  LogOut,
   TrendingUp,
   Brain,
   AlertTriangle,
@@ -52,19 +51,20 @@ const ANALYSIS_TYPES = [
 
 export default function PayerAnalysis() {
   const navigate = useNavigate();
-  const [userContext, setUserContext] = useState<any>(null);
+  const [userContext, setUserContext] = useState<UserContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
+
+  useEffect(() => {
+    getUserContext().then(ctx => setUserContext(ctx));
+  }, []);
 
   const [selectedYears, setSelectedYears] = useState<number[]>([]);
   const [selectedACOs, setSelectedACOs] = useState<string[]>([]);
   const [selectedAnalysisTypes, setSelectedAnalysisTypes] = useState<string[]>([]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
-  };
+  // logout handled by AppShell
 
   const toggleYear = (year: number) => {
     setSelectedYears((prev) =>
@@ -124,12 +124,13 @@ export default function PayerAnalysis() {
 
     setLoading(true);
 
-    // Prepare request data
-    const requestData: AnalysisRequest = {
+    // requestData will be sent to the backend prediction API when connected
+    const _requestData: AnalysisRequest = {
       years: selectedYears,
       acos: selectedACOs,
       analysisTypes: selectedAnalysisTypes,
     };
+    void _requestData; // reserved for backend integration
 
     try {
       // Simulate API call to backend
@@ -271,42 +272,19 @@ export default function PayerAnalysis() {
 
   if (showResults) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                  <Brain className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold">Analysis Results</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Generated for {selectedYears.length} year(s), {selectedACOs.length} ACO(s)
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" onClick={resetAnalysis}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  New Analysis
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="p-6">
+      <AppShell userContext={userContext} pageTitle="Predictive Analysis">
+        <div className="p-6">
           <div className="max-w-7xl mx-auto space-y-6">
-            <Button variant="ghost" onClick={() => navigate('/payer/dashboard')}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={resetAnalysis}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                New Analysis
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/payer/dashboard')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </div>
 
             {/* Analysis Results */}
             {analysisResults.map((result, index) => (
@@ -472,37 +450,14 @@ export default function PayerAnalysis() {
               </Card>
             ))}
           </div>
-        </main>
-      </div>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                <Brain className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">Predictive Analysis</h1>
-                <p className="text-sm text-muted-foreground">
-                  Configure and generate AI-powered insights
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="p-6">
+    <AppShell userContext={userContext} pageTitle="Predictive Analysis">
+      <div className="p-6">
         <div className="max-w-5xl mx-auto space-y-6">
           <Button variant="ghost" onClick={() => navigate('/payer/dashboard')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -672,7 +627,7 @@ export default function PayerAnalysis() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

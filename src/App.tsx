@@ -17,13 +17,16 @@ import PayerAnalysis from './pages/payer/PayerAnalysis';
 // ACO pages
 import ACODashboard from './pages/aco/ACODashboard';
 
+// Prediction page (both roles)
+import PredictPage from './pages/predict/PredictPage';
+
 // Protected route wrapper
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
       retry: 1,
     },
   },
@@ -34,19 +37,14 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => { setUser(session?.user ?? null); }
+    );
     return () => subscription.unsubscribe();
   }, []);
 
@@ -54,8 +52,8 @@ function App() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
         </div>
       </div>
     );
@@ -66,24 +64,19 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Public routes */}
-          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
+          <Route path="/login"  element={!user ? <LoginPage />  : <Navigate to="/" />} />
           <Route path="/signup" element={!user ? <SignUpPage /> : <Navigate to="/" />} />
 
-          {/* Root redirect to dashboard */}
+          {/* Root & /dashboard → role-based redirect */}
+          <Route path="/"         element={<ProtectedRoute><DashboardRouter /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardRouter /></ProtectedRoute>} />
+
+          {/* Prediction — accessible to both PAYER and ACO roles */}
           <Route
-            path="/"
+            path="/predict"
             element={
               <ProtectedRoute>
-                <DashboardRouter />
-              </ProtectedRoute>
-            }
-          />
-          
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardRouter />
+                <PredictPage />
               </ProtectedRoute>
             }
           />
@@ -95,9 +88,9 @@ function App() {
               <ProtectedRoute requireRole="payer">
                 <Routes>
                   <Route path="dashboard" element={<PayerDashboard />} />
-                  <Route path="acos" element={<PayerACOList />} />
-                  <Route path="analysis" element={<PayerAnalysis />} />
-                  <Route path="*" element={<Navigate to="/payer/dashboard" />} />
+                  <Route path="acos"      element={<PayerACOList />} />
+                  <Route path="analysis"  element={<PayerAnalysis />} />
+                  <Route path="*"         element={<Navigate to="/payer/dashboard" />} />
                 </Routes>
               </ProtectedRoute>
             }
@@ -110,13 +103,13 @@ function App() {
               <ProtectedRoute requireRole="aco">
                 <Routes>
                   <Route path="dashboard" element={<ACODashboard />} />
-                  <Route path="*" element={<Navigate to="/aco/dashboard" />} />
+                  <Route path="*"         element={<Navigate to="/aco/dashboard" />} />
                 </Routes>
               </ProtectedRoute>
             }
           />
 
-          {/* Catch all */}
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>
@@ -124,40 +117,23 @@ function App() {
   );
 }
 
-// Router component to direct users to appropriate dashboard based on role
 function DashboardRouter() {
   const [loading, setLoading] = useState(true);
   const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadUserRole() {
-      try {
-        const userContext = await getUserContext();
-        
-        if (!userContext) {
-          setLoading(false);
-          return;
-        }
-
-        // Get dashboard route based on role
-        const dashboardRoute = getDashboardRoute(userContext.role);
-        setRedirectPath(dashboardRoute);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error loading user role:', error);
-        setLoading(false);
-      }
-    }
-
-    loadUserRole();
+    getUserContext().then(ctx => {
+      setRedirectPath(ctx ? getDashboardRoute(ctx.role) : null);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading dashboard…</p>
         </div>
       </div>
     );

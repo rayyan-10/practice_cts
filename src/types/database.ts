@@ -1,3 +1,5 @@
+// ─── Scalar enum types ────────────────────────────────────────────────────────
+
 export type UserRole = 'PAYER' | 'ACO';
 export type OrganizationType = 'PAYER' | 'ACO' | 'PROVIDER_GROUP';
 export type VerificationStatus = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
@@ -10,6 +12,46 @@ export type AlertType = 'FINANCIAL' | 'QUALITY' | 'PROVIDER' | 'PATIENT_RISK' | 
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type AlertStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'DISMISSED';
 export type PerformanceStatus = 'EXCELLENT' | 'GOOD' | 'NEEDS_ATTENTION' | 'POOR' | 'CRITICAL';
+
+// ─── Identity & auth tables ───────────────────────────────────────────────────
+
+/**
+ * Mirrors the `profiles` table created by migration 100.
+ *
+ * Key schema notes:
+ *  - `id`      — gen_random_uuid(), NOT the auth UUID.
+ *  - `user_id` — the auth.users UUID; this is what auth.ts and RLS use.
+ *  - `role`    — 'PAYER' | 'ACO'; set at signup and stored in the DB.
+ *
+ * Do not use `id` to identify users in application code — always use `user_id`.
+ */
+export interface Profile {
+  id: string;        // row PK (gen_random_uuid) — not the auth UUID
+  user_id: string;   // auth.users UUID — use this everywhere
+  full_name: string;
+  email: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Mirrors the `profile_aco_assignments` table created by migration 005.
+ *
+ * Rules:
+ *  - One row per ACO user (UNIQUE on user_id).
+ *  - PAYER users have no row in this table.
+ *  - Not user-writeable via the anon key — insert/update via service role only.
+ *  - `user_id` matches auth.users UUID (same as profiles.user_id).
+ */
+export interface ProfileAcoAssignment {
+  id: string;
+  user_id: string;   // auth.users UUID
+  aco_id: string;    // acos.id UUID
+  assigned_at: string;
+}
+
+// ─── Organization tables ──────────────────────────────────────────────────────
 
 export interface Organization {
   id: string;
@@ -31,27 +73,7 @@ export interface Organization {
   updated_at: string;
 }
 
-export interface Profile {
-  id: string;
-  user_id: string;
-  full_name: string;
-  email: string;
-  role: UserRole;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface OrganizationMember {
-  id: string;
-  organization_id: string;
-  user_id: string;
-  role: UserRole;
-  status: VerificationStatus;
-  joined_at: string;
-  created_at: string;
-  organization?: Organization;
-  profile?: Profile;
-}
+// ─── ACO & contract tables ────────────────────────────────────────────────────
 
 export interface ACO {
   id: string;
@@ -63,6 +85,7 @@ export interface ACO {
   verification_status: VerificationStatus;
   created_at: string;
   updated_at: string;
+  // Joined relations (present when query uses select with nested relation)
   organization?: Organization;
 }
 
@@ -143,6 +166,8 @@ export interface Claim {
   created_at: string;
 }
 
+// ─── Performance & clinical tables ───────────────────────────────────────────
+
 export interface QualityMeasure {
   id: string;
   contract_id: string;
@@ -196,6 +221,8 @@ export interface ContractPerformance {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Alerts, recommendations & audit ─────────────────────────────────────────
 
 export interface Alert {
   id: string;

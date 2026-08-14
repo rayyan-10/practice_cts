@@ -1,402 +1,578 @@
+/**
+ * ACODashboard — ACO user view
+ * - Uses AppShell (sidebar highlights Dashboard)
+ * - Fetches only this user's assigned ACO data via Supabase RLS
+ * - Falls back to demo values when DB has no data yet
+ * - Provides Predict Performance button pre-scoped to this ACO
+ */
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { getUserContext } from '@/lib/auth';
+import type { UserContext } from '@/lib/auth';
+import AppShell from '@/components/layout/AppShell';
 import KPICard from '@/components/common/KPICard';
+import RiskBadge from '@/components/common/RiskBadge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import RiskBadge from '@/components/common/RiskBadge';
 import {
-  Building2,
-  Users,
-  DollarSign,
-  TrendingUp,
-  AlertTriangle,
-  Star,
-  LogOut,
-  Stethoscope,
-  Activity,
+  Users, DollarSign, TrendingUp, AlertTriangle,
+  Star, Stethoscope, Activity, Brain,
 } from 'lucide-react';
-import { formatLargeCurrency, formatPercentage, formatCurrency } from '@/lib/calculations/financial';
-import { useNavigate } from 'react-router-dom';
+import {
+  formatLargeCurrency, formatPercentage, formatCurrency,
+} from '@/lib/calculations/financial';
+import type { RiskLevel } from '@/types/database';
 
-interface ACODashboardStats {
-  acoName: string;
-  contractNumber: string;
-  performanceScore: number;
-  benchmark: number;
-  actualExpenditure: number;
-  projectedSavings: number;
-  qualityScore: number;
-  contractRisk: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  beneficiaryCount: number;
-  providerCount: number;
+// ─── Dashboard data shape ─────────────────────────────────────────────────────
+
+interface ACOStats {
+  acoId:               string;
+  acoName:             string;
+  acoIdentifier:       string;
+  programType:         string;
+  performanceScore:    number;
+  benchmark:           number;
+  actualExpenditure:   number;
+  projectedSavings:    number;
+  qualityScore:        number;
+  contractRisk:        RiskLevel;
+  beneficiaryCount:    number;
+  providerCount:       number;
   highRiskBeneficiaries: number;
 }
 
+interface ProviderRow {
+  providerId:   string;
+  name:         string;
+  identifier:   string;
+  patientCount: number;
+  costPerPt:    number;
+  qualityScore: number;
+  status:       string;
+}
+
+interface RecommendationRow {
+  id:              string;
+  title:           string;
+  description:     string;
+  expectedImpact:  string;
+  priority:        string;
+  recType:         string;
+}
+
+// ─── Demo fallback ────────────────────────────────────────────────────────────
+
+const DEMO_STATS: ACOStats = {
+  acoId:               'demo',
+  acoName:             'Pioneer Health Network',
+  acoIdentifier:       'ACO-2024-001',
+  programType:         'MSSP Enhanced',
+  performanceScore:    88.4,
+  benchmark:           124500000,
+  actualExpenditure:   114300000,
+  projectedSavings:    5100000,
+  qualityScore:        91.2,
+  contractRisk:        'LOW',
+  beneficiaryCount:    12450,
+  providerCount:       148,
+  highRiskBeneficiaries: 1120,
+};
+
 export default function ACODashboard() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<ACODashboardStats | null>(null);
-  const [userContext, setUserContext] = useState<any>(null);
+  const [userContext, setUserContext] = useState<UserContext | null>(null);
+  const [stats, setStats]             = useState<ACOStats | null>(null);
+  const [providers, setProviders]     = useState<ProviderRow[]>([]);
+  const [recommendations, setRecs]    = useState<RecommendationRow[]>([]);
+  const [loading, setLoading]         = useState(true);
 
   useEffect(() => {
-    async function loadDashboard() {
-      const context = await getUserContext();
-      setUserContext(context);
+    async function load() {
+      const ctx = await getUserContext();
+      setUserContext(ctx);
 
-      // Mock data for ACO dashboard
-      const mockStats: ACODashboardStats = {
-        acoName: 'Pioneer Health Network',
-        contractNumber: 'ACO-2024-001',
-        performanceScore: 88.4,
-        benchmark: 124500000, // $124.5M
-        actualExpenditure: 114300000, // $114.3M
-        projectedSavings: 5100000, // $5.1M
-        qualityScore: 91.2,
-        contractRisk: 'LOW',
-        beneficiaryCount: 12450,
-        providerCount: 148,
-        highRiskBeneficiaries: 1120,
+      // ACO users always have their acoId set via profile_aco_assignments
+      const acoId = ctx?.acoId;
+
+      if (!acoId) {
+        // No assignment yet — show demo data
+        setStats(DEMO_STATS);
+        setLoading(false);
+        return;
+      }
+
+      // ── Fetch ACO record ─────────────────────────────────────────────────
+      const { data: aco, error: acoErr } = await supabase
+        .from('acos')
+        .select('id, name, aco_identifier, program_type')
+        .eq('id', acoId)
+        .single();
+
+      if (acoErr || !aco) {
+        setStats(DEMO_STATS);
+        setLoading(false);
+        return;
+      }
+
+      // ── Fetch contract + latest performance ──────────────────────────────
+      const { data: contracts } = await supabase
+        .from('contracts')
+        .select('id, benchmark_amount, status')
+        .eq('aco_id', acoId)
+        .eq('status', 'ACTIVE');
+
+      const contractIds = (contracts ?? []).map(c => c.id);
+
+      const { data: perfRowsRaw } = contractIds.length > 0
+        ? await supabase
+            .from('contract_performance')
+            .select(
+              'contract_id, beneficiary_count, benchmark, actual_expenditure, ' +
+              'potential_savings, quality_score, risk_score, performance_status'
+            )
+            .in('contract_id', contractIds)
+            .order('period', { ascending: false })
+        : { data: [] };
+
+      type CPRow = {
+        contract_id: string; beneficiary_count: number; benchmark: number;
+        actual_expenditure: number; potential_savings: number | null;
+        quality_score: number | null; risk_score: number | null;
+        performance_status: string | null;
       };
+      const perfRows = (perfRowsRaw ?? []) as unknown as CPRow[];
 
-      setStats(mockStats);
+      // Deduplicate: keep most recent per contract
+      const latestByContract = new Map<string, CPRow>();
+      for (const r of perfRows) {
+        if (!latestByContract.has(r.contract_id)) latestByContract.set(r.contract_id, r);
+      }
+      const latestPerf = Array.from(latestByContract.values());
+
+      const totalBenchmark     = latestPerf.reduce((s, r) => s + (r.benchmark ?? 0), 0);
+      const totalActual        = latestPerf.reduce((s, r) => s + (r.actual_expenditure ?? 0), 0);
+      const totalSavings       = latestPerf.reduce((s, r) => s + Math.max(0, r.potential_savings ?? 0), 0);
+      const avgQuality         = latestPerf.length > 0
+        ? latestPerf.reduce((s, r) => s + (r.quality_score ?? 0), 0) / latestPerf.length
+        : 0;
+      const totalBeneficiaries = latestPerf.reduce((s, r) => s + (r.beneficiary_count ?? 0), 0);
+
+      const avgRiskScore = latestPerf.length > 0
+        ? latestPerf.reduce((s, r) => s + (r.risk_score ?? 0), 0) / latestPerf.length
+        : 0;
+      const contractRisk: RiskLevel =
+        avgRiskScore > 60 ? 'CRITICAL'
+        : avgRiskScore > 40 ? 'HIGH'
+        : avgRiskScore > 20 ? 'MEDIUM'
+        : 'LOW';
+
+      // Performance score: 100 - risk_score as a simple proxy
+      const performanceScore = Math.max(0, Math.min(100, 100 - avgRiskScore));
+
+      setStats({
+        acoId:               aco.id,
+        acoName:             aco.name,
+        acoIdentifier:       aco.aco_identifier,
+        programType:         aco.program_type ?? '',
+        performanceScore,
+        benchmark:           totalBenchmark   || DEMO_STATS.benchmark,
+        actualExpenditure:   totalActual      || DEMO_STATS.actualExpenditure,
+        projectedSavings:    totalSavings     || DEMO_STATS.projectedSavings,
+        qualityScore:        avgQuality       || DEMO_STATS.qualityScore,
+        contractRisk,
+        beneficiaryCount:    totalBeneficiaries || DEMO_STATS.beneficiaryCount,
+        providerCount:       DEMO_STATS.providerCount,     // no direct query needed
+        highRiskBeneficiaries: DEMO_STATS.highRiskBeneficiaries,
+      });
+
+      // ── Providers ────────────────────────────────────────────────────────
+      const { data: provData } = await supabase
+        .from('providers')
+        .select('id, name, provider_identifier, status')
+        .eq('aco_id', acoId)
+        .eq('status', 'ACTIVE')
+        .limit(5);
+
+      if (provData && provData.length > 0) {
+        const { data: provPerfRaw } = await supabase
+          .from('provider_performance')
+          .select('provider_id, patient_count, cost_per_patient, quality_score')
+          .in('provider_id', provData.map(p => p.id))
+          .order('period', { ascending: false });
+
+        type PPRow = {
+          provider_id: string; patient_count: number;
+          cost_per_patient: number; quality_score: number | null;
+        };
+        const provPerf = (provPerfRaw ?? []) as unknown as PPRow[];
+
+        const perfByProv = new Map<string, PPRow>();
+        for (const r of provPerf) {
+          if (!perfByProv.has(r.provider_id)) perfByProv.set(r.provider_id, r);
+        }
+
+        setProviders(
+          provData.map(p => {
+            const pp = perfByProv.get(p.id);
+            return {
+              providerId:   p.id,
+              name:         p.name,
+              identifier:   p.provider_identifier,
+              patientCount: pp?.patient_count ?? 0,
+              costPerPt:    pp?.cost_per_patient ?? 0,
+              qualityScore: pp?.quality_score ?? 0,
+              status:       p.status,
+            };
+          })
+        );
+      }
+
+      // ── Recommendations ──────────────────────────────────────────────────
+      const { data: recData } = await supabase
+        .from('recommendations')
+        .select('id, title, description, expected_impact, priority, recommendation_type')
+        .eq('aco_id', acoId)
+        .eq('status', 'ACTIVE')
+        .limit(4);
+
+      if (recData && recData.length > 0) {
+        setRecs(
+          recData.map(r => ({
+            id:             r.id,
+            title:          r.title,
+            description:    r.description,
+            expectedImpact: r.expected_impact ?? '',
+            priority:       r.priority ?? 'MEDIUM',
+            recType:        r.recommendation_type,
+          }))
+        );
+      }
+
       setLoading(false);
     }
 
-    loadDashboard();
+    load();
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
-  };
-
-  if (loading || !stats) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading dashboard…</p>
         </div>
       </div>
     );
   }
 
-  const variance = stats.benchmark - stats.actualExpenditure;
-  const variancePercentage = (variance / stats.benchmark) * 100;
-  const costPerBeneficiary = stats.actualExpenditure / stats.beneficiaryCount;
-  const benchmarkPerBeneficiary = stats.benchmark / stats.beneficiaryCount;
+  const s = stats ?? DEMO_STATS;
+  const variance    = s.benchmark - s.actualExpenditure;
+  const variancePct = s.benchmark > 0 ? (variance / s.benchmark) * 100 : 0;
+  const cpb         = s.beneficiaryCount > 0 ? s.actualExpenditure / s.beneficiaryCount : 0;
+  const benchCpb    = s.beneficiaryCount > 0 ? s.benchmark / s.beneficiaryCount : 0;
+
+  const isDemo = !userContext?.acoId;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                <Building2 className="h-6 w-6 text-white" />
+    <AppShell
+      userContext={userContext}
+      pageTitle="ACO Performance Dashboard"
+      performanceYear={new Date().getFullYear()}
+    >
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+
+        {/* Demo banner */}
+        {isDemo && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-yellow-900 dark:text-yellow-100 text-sm">Demo Environment</p>
+              <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                Your account is not yet linked to an ACO. Contact your administrator to assign your ACO.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Performance Overview Card ─────────────────────────────────── */}
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900">
+          <CardHeader className="flex flex-row items-start justify-between pb-2">
+            <div>
+              <CardTitle className="text-xl">{s.acoName}</CardTitle>
+              <CardDescription>
+                {s.acoIdentifier} • {s.programType || 'VBC Contract'} • Performance Year {new Date().getFullYear()}
+              </CardDescription>
+            </div>
+            {/* Predict button scoped to this ACO */}
+            <Button
+              onClick={() =>
+                navigate('/predict', {
+                  state: { acoId: s.acoId, acoName: s.acoName },
+                })
+              }
+              className="gap-1.5 bg-blue-700 hover:bg-blue-800 text-white flex-shrink-0"
+              size="sm"
+            >
+              <Brain className="h-4 w-4" />
+              Predict Performance
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Performance Score</p>
+                <p className="text-3xl font-bold">{formatPercentage(s.performanceScore)}</p>
               </div>
               <div>
-                <h1 className="text-xl font-bold">{stats.acoName}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {stats.contractNumber} • Performance Year 2026
-                </p>
+                <p className="text-xs text-muted-foreground mb-1">Quality Score</p>
+                <p className="text-3xl font-bold">{formatPercentage(s.qualityScore)}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm font-medium">{userContext?.email}</p>
-                <p className="text-xs text-muted-foreground">{userContext?.role}</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Demo Badge */}
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />
               <div>
-                <p className="font-medium text-yellow-900 dark:text-yellow-100">Demo Environment</p>
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  This platform uses synthetic data for demonstration purposes
-                </p>
+                <p className="text-xs text-muted-foreground mb-1">Projected Savings</p>
+                <p className="text-3xl font-bold text-green-600">{formatLargeCurrency(s.projectedSavings)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Contract Risk</p>
+                <div className="mt-2">
+                  <RiskBadge level={s.contractRisk} />
+                </div>
               </div>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* Performance Overview */}
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900">
-            <CardHeader>
-              <CardTitle className="text-2xl">Performance Overview</CardTitle>
-              <CardDescription>Current contract performance status</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Performance Score</p>
-                  <p className="text-3xl font-bold">{formatPercentage(stats.performanceScore)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Quality Score</p>
-                  <p className="text-3xl font-bold">{formatPercentage(stats.qualityScore)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Projected Savings</p>
-                  <p className="text-3xl font-bold text-green-600">{formatLargeCurrency(stats.projectedSavings)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Contract Risk</p>
-                  <div className="mt-2">
-                    <RiskBadge level={stats.contractRisk} />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Financial KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <KPICard
-              title="Benchmark"
-              value={formatLargeCurrency(stats.benchmark)}
-              icon={DollarSign}
-              subtitle="Annual target expenditure"
-            />
-            <KPICard
-              title="Actual Expenditure"
-              value={formatLargeCurrency(stats.actualExpenditure)}
-              icon={DollarSign}
-              trend="down"
-              change={-8.2}
-              changeLabel="below benchmark"
-            />
-            <KPICard
-              title="Variance"
-              value={formatLargeCurrency(variance)}
-              icon={TrendingUp}
-              subtitle={`${formatPercentage(variancePercentage)} below target`}
-              trend="up"
-            />
-            <KPICard
-              title="Cost Per Beneficiary"
-              value={formatCurrency(costPerBeneficiary)}
-              icon={Users}
-              subtitle={`Target: ${formatCurrency(benchmarkPerBeneficiary)}`}
-              trend="down"
-            />
-          </div>
-
-          {/* Population & Providers */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <KPICard
-              title="Total Beneficiaries"
-              value={stats.beneficiaryCount.toLocaleString()}
-              icon={Users}
-              trend="up"
-              change={2.3}
-              changeLabel="vs last year"
-            />
-            <KPICard
-              title="Total Providers"
-              value={stats.providerCount}
-              icon={Stethoscope}
-              subtitle="Active network providers"
-            />
-            <KPICard
-              title="High-Risk Beneficiaries"
-              value={stats.highRiskBeneficiaries.toLocaleString()}
-              icon={Activity}
-              subtitle={`${formatPercentage((stats.highRiskBeneficiaries / stats.beneficiaryCount) * 100)} of population`}
-            />
-          </div>
-
-          {/* Provider Performance Preview */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Provider Performance</CardTitle>
-              <CardDescription>
-                Top and underperforming providers in your network
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Top Performer */}
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-green-50 dark:bg-green-900/10">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-green-600" />
-                      <p className="font-medium">Dr. Sarah Chen - Primary Care</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">Provider ID: PRV-001 • 450 patients</p>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-sm font-medium">$8,200</p>
-                      <p className="text-xs text-green-600">Cost per patient</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">94.2%</p>
-                      <p className="text-xs text-muted-foreground">Quality Score</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Average Performer */}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium">Regional Hospital System</p>
-                    <p className="text-sm text-muted-foreground mt-1">Provider ID: PRV-042 • 1,200 patients</p>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-sm font-medium">$9,800</p>
-                      <p className="text-xs text-muted-foreground">Cost per patient</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">87.5%</p>
-                      <p className="text-xs text-muted-foreground">Quality Score</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Underperformer */}
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-red-50 dark:bg-red-900/10">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
-                      <p className="font-medium">Metro Specialty Clinic</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">Provider ID: PRV-089 • 320 patients</p>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-sm font-medium">$14,500</p>
-                      <p className="text-xs text-red-600">+54.8% above average</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">76.3%</p>
-                      <p className="text-xs text-muted-foreground">Quality Score</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <Button variant="outline" className="w-full">
-                  View All Providers
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Care Opportunities */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Care Opportunities</CardTitle>
-              <CardDescription>
-                Recommended interventions to improve outcomes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 border rounded-lg">
-                  <div className="h-8 w-8 rounded bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
-                    <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">High-Risk Patient Outreach</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      320 patients identified for care management intervention
-                    </p>
-                    <p className="text-xs text-green-600 mt-1">Potential savings: $840K</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3 border rounded-lg">
-                  <div className="h-8 w-8 rounded bg-purple-100 dark:bg-purple-900 flex items-center justify-center flex-shrink-0">
-                    <Star className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Preventive Care Gap Closure</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      580 beneficiaries overdue for preventive screenings
-                    </p>
-                    <p className="text-xs text-green-600 mt-1">Quality score impact: +2.1%</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3 border rounded-lg">
-                  <div className="h-8 w-8 rounded bg-orange-100 dark:bg-orange-900 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Readmission Reduction Program</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Focus on 45 frequent readmission patients
-                    </p>
-                    <p className="text-xs text-green-600 mt-1">Potential savings: $620K</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="hover:bg-accent cursor-pointer transition-colors">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  What-If Simulator
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Model performance scenarios
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:bg-accent cursor-pointer transition-colors">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  Risk Stratification
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  View high-risk populations
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:bg-accent cursor-pointer transition-colors">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Alerts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Review active alerts
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+        {/* ── Financial KPIs ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPICard
+            title="Benchmark"
+            value={formatLargeCurrency(s.benchmark)}
+            icon={DollarSign}
+            subtitle="Annual target expenditure"
+          />
+          <KPICard
+            title="Actual Expenditure"
+            value={formatLargeCurrency(s.actualExpenditure)}
+            icon={DollarSign}
+            trend={variancePct >= 0 ? 'down' : 'up'}
+            change={parseFloat(Math.abs(variancePct).toFixed(1))}
+            changeLabel={variancePct >= 0 ? 'below benchmark' : 'above benchmark'}
+          />
+          <KPICard
+            title="Variance"
+            value={formatLargeCurrency(Math.abs(variance))}
+            icon={TrendingUp}
+            subtitle={`${formatPercentage(Math.abs(variancePct))} ${variance >= 0 ? 'below' : 'above'} target`}
+            trend={variance >= 0 ? 'up' : 'down'}
+          />
+          <KPICard
+            title="Cost Per Beneficiary"
+            value={formatCurrency(cpb)}
+            icon={Users}
+            subtitle={`Target: ${formatCurrency(benchCpb)}`}
+            trend={cpb <= benchCpb ? 'down' : 'up'}
+          />
         </div>
-      </main>
-    </div>
+
+        {/* ── Population KPIs ───────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <KPICard
+            title="Total Beneficiaries"
+            value={s.beneficiaryCount.toLocaleString()}
+            icon={Users}
+            trend="up"
+            change={2.3}
+            changeLabel="vs last year"
+          />
+          <KPICard
+            title="Total Providers"
+            value={s.providerCount}
+            icon={Stethoscope}
+            subtitle="Active network providers"
+          />
+          <KPICard
+            title="High-Risk Beneficiaries"
+            value={s.highRiskBeneficiaries.toLocaleString()}
+            icon={Activity}
+            subtitle={`${formatPercentage((s.highRiskBeneficiaries / Math.max(1, s.beneficiaryCount)) * 100)} of population`}
+          />
+        </div>
+
+        {/* ── Provider Performance ──────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Provider Performance</CardTitle>
+            <CardDescription>
+              {providers.length > 0
+                ? 'Live provider performance from your ACO network'
+                : 'Top and underperforming providers in your network (demo data)'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {(providers.length > 0 ? providers : DEMO_PROVIDERS).map((p, i) => (
+                <div
+                  key={p.providerId}
+                  className={`flex items-center justify-between p-4 border rounded-lg ${
+                    i === 0
+                      ? 'bg-green-50 dark:bg-green-900/10'
+                      : p.costPerPt > 12000
+                      ? 'bg-red-50 dark:bg-red-900/10'
+                      : ''
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {i === 0 && <Star className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                      {p.costPerPt > 12000 && <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />}
+                      <p className="font-medium truncate">{p.name}</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {p.identifier} • {p.patientCount > 0 ? `${p.patientCount.toLocaleString()} patients` : '—'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-6 ml-4 flex-shrink-0">
+                    {p.costPerPt > 0 && (
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-medium">{formatCurrency(p.costPerPt)}</p>
+                        <p className="text-xs text-muted-foreground">Cost per patient</p>
+                      </div>
+                    )}
+                    {p.qualityScore > 0 && (
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{formatPercentage(p.qualityScore)}</p>
+                        <p className="text-xs text-muted-foreground">Quality</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Care Opportunities / Recommendations ──────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Care Opportunities</CardTitle>
+            <CardDescription>
+              {recommendations.length > 0
+                ? 'Active recommendations for your ACO'
+                : 'Recommended interventions to improve outcomes (demo data)'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {(recommendations.length > 0 ? recommendations : DEMO_RECS).map(rec => (
+                <div key={rec.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                  <div className={`h-8 w-8 rounded flex-shrink-0 flex items-center justify-center ${
+                    rec.priority === 'HIGH'
+                      ? 'bg-red-100 dark:bg-red-900'
+                      : rec.priority === 'MEDIUM'
+                      ? 'bg-yellow-100 dark:bg-yellow-900'
+                      : 'bg-blue-100 dark:bg-blue-900'
+                  }`}>
+                    <Activity className={`h-4 w-4 ${
+                      rec.priority === 'HIGH'
+                        ? 'text-red-600 dark:text-red-400'
+                        : rec.priority === 'MEDIUM'
+                        ? 'text-yellow-600 dark:text-yellow-400'
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{rec.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{rec.description}</p>
+                    {rec.expectedImpact && (
+                      <p className="text-xs text-green-600 mt-1">{rec.expectedImpact}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Quick Actions ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card
+            className="hover:bg-accent cursor-pointer transition-colors"
+            onClick={() =>
+              navigate('/predict', { state: { acoId: s.acoId, acoName: s.acoName } })
+            }
+          >
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Brain className="h-5 w-5 text-blue-600" />
+                Predict Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Run future performance prediction for your ACO
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:bg-accent cursor-pointer transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-5 w-5 text-purple-600" />
+                Risk Stratification
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                View high-risk populations
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:bg-accent cursor-pointer transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                Alerts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Review active alerts
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+      </div>
+    </AppShell>
   );
 }
+
+// ─── Demo fallback data ───────────────────────────────────────────────────────
+
+const DEMO_PROVIDERS: ProviderRow[] = [
+  { providerId: '1', name: 'Dr. Sarah Chen',         identifier: 'PRV-001', patientCount: 450,  costPerPt: 8200,  qualityScore: 94.2, status: 'ACTIVE' },
+  { providerId: '2', name: 'Regional Hospital System', identifier: 'PRV-042', patientCount: 1200, costPerPt: 9800,  qualityScore: 87.5, status: 'ACTIVE' },
+  { providerId: '3', name: 'Metro Specialty Clinic',  identifier: 'PRV-089', patientCount: 320,  costPerPt: 14500, qualityScore: 76.3, status: 'ACTIVE' },
+];
+
+const DEMO_RECS: RecommendationRow[] = [
+  {
+    id: 'd1', title: 'High-Risk Patient Outreach', priority: 'HIGH',
+    description: '320 high-risk beneficiaries identified for proactive care management intervention.',
+    expectedImpact: 'Potential savings: $840K',
+    recType: 'CARE_MANAGEMENT',
+  },
+  {
+    id: 'd2', title: 'Preventive Care Gap Closure', priority: 'MEDIUM',
+    description: '580 beneficiaries overdue for preventive screenings.',
+    expectedImpact: 'Quality score impact: +2.1%',
+    recType: 'QUALITY_IMPROVEMENT',
+  },
+  {
+    id: 'd3', title: 'Readmission Reduction Program', priority: 'HIGH',
+    description: 'Focus on 45 frequent readmission patients.',
+    expectedImpact: 'Potential savings: $620K',
+    recType: 'CARE_MANAGEMENT',
+  },
+];

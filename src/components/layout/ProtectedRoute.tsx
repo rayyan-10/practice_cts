@@ -1,7 +1,7 @@
 import { useEffect, useState, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { getUserContext, isPayerUser, isACOUser, getDashboardRoute } from '@/lib/auth';
+import { getUserContext, isPayerUser, isACOUser } from '@/lib/auth';
 import type { UserContext } from '@/lib/auth';
 
 interface ProtectedRouteProps {
